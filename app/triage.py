@@ -89,18 +89,25 @@ def triage(title: str, body: str, diff: str, contributing: str | None,
     injection = j.injection_detected or tripwire
     if injection and not j.injection_detected:
         concerns.append("Safety check: the PR text contains wording that tries to instruct the reviewer or the AI.")
+    confidence = j.confidence
+    reply = j.suggested_reply
     if injection and verdict == "looks_legit":
         verdict = "unsure"
+        confidence = min(confidence, 0.5)
         concerns.append("Downgraded from 'Looks legit' because the PR attempted prompt injection. A human must review it.")
+    if injection:
+        # Model text written while reading attacker-controlled input is not offered to the maintainer.
+        reply = ""
+        concerns.append("No reply is suggested because the PR text tried to steer the AI. Write your own.")
 
     return TriageResult(
         verdict=verdict,
         verdict_label=VERDICT_LABELS[verdict],
-        confidence=j.confidence,
+        confidence=confidence,
         reasons=j.reasons,
         concerns=concerns,
         injection_detected=injection,
-        suggested_reply=j.suggested_reply,
+        suggested_reply=reply,
         diff_truncated=diff_truncated,
         signals=signals or {},
     )

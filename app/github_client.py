@@ -9,6 +9,10 @@ import httpx
 from . import config
 
 PR_URL = re.compile(r"^https?://github\.com/([\w.-]+)/([\w.-]+)/pull/(\d+)/?(?:[#?].*)?$")
+REPO_URL = re.compile(r"^https?://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?(?:[/#?].*)?$")
+
+# CONTRIBUTING.md rarely changes during a session; caching it saves GitHub rate limit when triaging many PRs.
+_CONTRIB_CACHE: dict[tuple[str, str], str | None] = {}
 
 
 class GitHubError(Exception):
@@ -66,12 +70,19 @@ def fetch_pr(url: str) -> PullRequest:
         diff_resp = _get(client, f"{base}/pulls/{number}", "application/vnd.github.v3.diff")
         diff = diff_resp.text if diff_resp.status_code == 200 else ""
 
-        contributing = None
-        for path in ("CONTRIBUTING.md", ".github/CONTRIBUTING.md", "docs/CONTRIBUTING.md"):
-            r = _get(client, f"{base}/contents/{path}", "application/vnd.github.raw+json")
-            if r.status_code == 200:
-                contributing = r.text
-                break
+        key = (owner.lower(), repo.lower())
+        if key in _CONTRIB_CACHE:
+            contributing = _CONTRIB_CACHE[key]
+        else:
+            contributing, statuses = None, []
+            for path in ("CONTRIBUTING.md", ".github/CONTRIBUTING.md", "docs/CONTRIBUTING.md"):
+                r = _get(client, f"{base}/contents/{path}", "application/vnd.github.raw+json")
+                statuses.append(r.status_code)
+                if r.status_code == 200:
+                    contributing = r.text
+                    break
+            if contributing or all(s == 404 for s in statuses):  # never cache a rate-limit failure
+                _CONTRIB_CACHE[key] = contributing
 
         age = None
         login = (data.get("user") or {}).get("login")
@@ -82,3 +93,31 @@ def fetch_pr(url: str) -> PullRequest:
                 age = (datetime.now(timezone.utc) - created).days
 
     return PullRequest(owner, repo, number, data.get("title") or "", data.get("body") or "", diff, contributing, age)
+
+
+def parse_repo_url(url: str) -> tuple[str, str]:
+    """Accepts a repo link, or a PR link (the repo is taken from it)."""
+    m = REPO_URL.match(url.strip())
+    if not m:
+        raise GitHubError("That doesn't look like a GitHub repository link (https://github.com/OWNER/REPO).")
+    return m.group(1), m.group(2)
+
+
+def list_open_prs(url: str, limit: int = 20) -> dict:
+    """Lists the most recently updated open PRs of a public repo. Authors are deliberately left out."""
+    owner, repo = parse_repo_url(url)
+    api = f"https://api.github.com/repos/{owner}/{repo}/pulls?state=open&sort=updated&direction=desc&per_page={limit}"
+    with httpx.Client(timeout=20) as client:
+        r = _get(client, api, "application/vnd.github+json")
+    if r.status_code == 404:
+        raise GitHubError("Repository not found. Check the link, and that the repository is public.")
+    if r.status_code in (403, 429):
+        raise GitHubError("GitHub rate limit reached. Add a GITHUB_TOKEN on the server, or use the demo PRs.")
+    if r.status_code != 200:
+        raise GitHubError(f"GitHub returned HTTP {r.status_code}.")
+    prs = [
+        {"number": p["number"], "title": p.get("title") or "", "url": p["html_url"],
+         "draft": bool(p.get("draft")), "updated_at": p.get("updated_at")}
+        for p in r.json()
+    ]
+    return {"owner": owner, "repo": repo, "prs": prs}

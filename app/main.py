@@ -5,12 +5,13 @@ import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import config
-from .github_client import GitHubError, fetch_pr
+from .github_client import GitHubError, fetch_pr, list_open_prs
 from .triage import triage
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -18,6 +19,8 @@ STATIC = Path(__file__).resolve().parent / "static"
 SAMPLES = ROOT / "samples" / "prs.json"
 
 app = FastAPI(title="PRTriage", description="AI-assisted pull request triage for open-source maintainers.")
+# Open CORS (no cookies, no credentials) so a browser extension or another page can call the API.
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"], allow_headers=["*"])
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -62,6 +65,14 @@ def get_samples():
     ]
 
 
+@app.get("/api/repo-prs")
+def repo_prs(url: str):
+    try:
+        return list_open_prs(url)
+    except GitHubError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/triage-url")
 def triage_url(req: UrlRequest):
     try:
@@ -73,7 +84,8 @@ def triage_url(req: UrlRequest):
         signals={"author_account_age_days": pr.author_account_age_days,
                  "note": "Weak signal, shown for context only. It is not used for the verdict."},
     )
-    return {"pr": {"owner": pr.owner, "repo": pr.repo, "number": pr.number, "title": pr.title}, **result.to_dict()}
+    return {"pr": {"owner": pr.owner, "repo": pr.repo, "number": pr.number, "title": pr.title},
+            "diff_preview": pr.diff[:8000], **result.to_dict()}
 
 
 @app.post("/api/triage-text")

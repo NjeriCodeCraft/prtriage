@@ -6,166 +6,330 @@
 <title>PRTriage</title>
 <style>
   :root {
-    --burgundy: #6d1a36; --burgundy-dark: #4a1124;
-    --blue: #dbe9f6; --blue-deep: #3d6a94;
-    --yellow: #f6d860; --bg: #faf7f8; --ink: #2a1a20; --card: #fff; --line: #e6dde0;
+    --wine: #6d1a36; --wine-deep: #43101f; --wine-soft: #f4e3e8;
+    --sky: #dbe9f6; --sky-deep: #2f5d86; --sky-wash: #f1f7fc;
+    --sun: #f6d860; --sun-deep: #5a4700;
+    --leaf: #1f6b4a; --leaf-wash: #dff1e7;
+    --paper: #fbfafb; --ink: #25161c; --muted: #6a5a61; --line: #e4dbde;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
-  header { background: var(--burgundy); color: #fff; padding: 20px 16px; }
-  header h1 { margin: 0; font-size: 1.5rem; }
-  header p { margin: 4px 0 0; color: var(--blue); }
-  main { max-width: 860px; margin: 0 auto; padding: 16px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-  .banner { background: #fff8dc; border-left: 4px solid var(--yellow); padding: 10px 12px; border-radius: 6px; font-size: .9rem; }
-  label { display: block; font-weight: 600; margin: 12px 0 4px; }
-  input, textarea, select { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
-  textarea { min-height: 90px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem; }
-  button { background: var(--burgundy); color: #fff; border: 0; padding: 10px 18px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; margin-top: 12px; }
-  button:hover { background: var(--burgundy-dark); }
-  button:disabled { opacity: .6; cursor: wait; }
-  .tabs { display: flex; gap: 8px; margin-bottom: 8px; }
-  .tab { background: var(--blue); color: var(--burgundy-dark); margin: 0; }
-  .tab.active { background: var(--burgundy); color: #fff; }
-  .hidden { display: none; }
-  .verdict { display: inline-block; padding: 6px 14px; border-radius: 999px; font-weight: 700; font-size: 1.1rem; }
-  .v-looks_legit { background: #d8f0dc; color: #1c5a2b; }
-  .v-needs_fixes { background: var(--yellow); color: #5a4700; }
-  .v-low_effort { background: #f4d4dc; color: var(--burgundy-dark); }
-  .v-unsure { background: var(--blue); color: var(--blue-deep); }
-  .warn { background: #f4d4dc; border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
-  .error { background: #f4d4dc; color: var(--burgundy-dark); padding: 10px 12px; border-radius: 8px; margin-top: 12px; }
-  .reply { white-space: pre-wrap; background: var(--blue); border-radius: 8px; padding: 10px 12px; }
-  .meta { color: #6b5a60; font-size: .85rem; }
-  footer { text-align: center; padding: 24px 16px; color: #6b5a60; font-size: .9rem; }
-  footer a { color: var(--burgundy); }
-  ul { margin: 6px 0; padding-left: 20px; }
+  html, body { height: 100%; }
+  body { margin: 0; font: 15px/1.5 var(--sans); background: var(--paper); color: var(--ink); display: flex; flex-direction: column; }
+  :focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+  button { font: inherit; cursor: pointer; }
+
+  /* ---------- top bar ---------- */
+  .bar { background: var(--wine); color: #fff; padding: 14px 20px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .brand { font: 700 1.35rem/1 var(--serif); letter-spacing: .01em; margin-right: 8px; }
+  .brand small { display: block; font: 400 .72rem/1.3 var(--sans); color: var(--sky); letter-spacing: 0; margin-top: 3px; }
+  .repo-form { flex: 1; min-width: 280px; display: flex; gap: 8px; }
+  .repo-form input { flex: 1; padding: 10px 12px; border-radius: 8px; border: 2px solid transparent; font: inherit; background: #fff; color: var(--ink); }
+  .repo-form input:focus { border-color: var(--sun); outline: none; }
+  .btn { border: 0; border-radius: 8px; padding: 10px 16px; font-weight: 600; }
+  .btn-sun { background: var(--sun); color: var(--sun-deep); }
+  .btn-sun:hover { background: #fbe589; }
+  .btn-ghost { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.45); }
+  .btn-ghost:hover { background: rgba(255,255,255,.12); }
+  .btn-wine { background: var(--wine); color: #fff; }
+  .btn-wine:hover { background: var(--wine-deep); }
+  .btn:disabled { opacity: .55; cursor: progress; }
+  .notice { background: var(--wine-deep); color: var(--sky); font-size: .82rem; padding: 6px 20px; }
+
+  /* ---------- workspace ---------- */
+  .work { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 380px) 1fr; }
+  .queue { border-right: 1px solid var(--line); background: #fff; overflow-y: auto; display: flex; flex-direction: column; }
+  .queue-head { padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--line); background: var(--sky-wash); position: sticky; top: 0; z-index: 1; }
+  .queue-head h2 { margin: 0; font: 700 1.05rem/1.2 var(--serif); }
+  .queue-head .sub { color: var(--muted); font-size: .8rem; }
+  .queue-head .btn { padding: 7px 12px; font-size: .85rem; }
+  .rows { list-style: none; margin: 0; padding: 0; }
+  .row { display: block; width: 100%; text-align: left; background: #fff; border: 0; border-bottom: 1px solid var(--line); border-left: 6px solid var(--line); padding: 12px 14px 12px 12px; }
+  .row:hover { background: var(--sky-wash); }
+  .row[aria-current="true"] { background: var(--sky); }
+  .row .t { font-weight: 600; display: block; }
+  .row .m { display: flex; gap: 8px; align-items: center; margin-top: 4px; font-size: .8rem; color: var(--muted); }
+  .chip { font-weight: 700; font-size: .78rem; padding: 1px 8px; border-radius: 999px; }
+  .s-looks_legit { border-left-color: var(--leaf); } .chip.s-looks_legit { background: var(--leaf-wash); color: var(--leaf); }
+  .s-needs_fixes { border-left-color: var(--sun); } .chip.s-needs_fixes { background: var(--sun); color: var(--sun-deep); }
+  .s-low_effort { border-left-color: var(--wine); } .chip.s-low_effort { background: var(--wine-soft); color: var(--wine); }
+  .s-unsure { border-left-color: var(--sky-deep); } .chip.s-unsure { background: var(--sky); color: var(--sky-deep); }
+  .spin { width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--wine); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .queue-empty { padding: 28px 20px; color: var(--muted); }
+  .queue-empty strong { color: var(--ink); display: block; font: 700 1.1rem/1.3 var(--serif); margin-bottom: 6px; }
+  .paste { border-top: 1px solid var(--line); margin-top: auto; padding: 10px 16px; background: var(--sky-wash); }
+  .paste summary { cursor: pointer; font-weight: 600; color: var(--wine); }
+  .paste label { display: block; font-size: .8rem; font-weight: 600; margin: 8px 0 2px; }
+  .paste input, .paste textarea { width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: .85rem; }
+  .paste textarea { font-family: var(--mono); min-height: 64px; }
+
+  /* ---------- review panel ---------- */
+  .panel { overflow-y: auto; padding: 0 0 40px; background: var(--paper); }
+  .panel-empty { max-width: 520px; margin: 14vh auto 0; padding: 0 24px; color: var(--muted); }
+  .panel-empty h2 { font: 700 1.8rem/1.2 var(--serif); color: var(--ink); margin: 0 0 10px; }
+  .verdict { padding: 22px 28px; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+  .verdict h2 { margin: 0; font: 700 2.3rem/1.05 var(--serif); }
+  .verdict .conf { font-size: .9rem; opacity: .85; }
+  .verdict.v-looks_legit { background: var(--leaf); color: #fff; }
+  .verdict.v-needs_fixes { background: var(--sun); color: var(--sun-deep); }
+  .verdict.v-low_effort { background: var(--wine); color: #fff; }
+  .verdict.v-unsure { background: var(--sky); color: var(--sky-deep); }
+  .body { max-width: 760px; padding: 4px 28px 0; }
+  .pr-title { font: 600 1.05rem/1.4 var(--serif); margin: 18px 0 4px; }
+  .pr-title a { color: var(--wine); }
+  .alert { margin: 14px 0; padding: 12px 14px; border-radius: 8px; background: var(--wine-soft); border-left: 5px solid var(--wine); }
+  .alert.soft { background: var(--sky-wash); border-left-color: var(--sky-deep); }
+  h3 { font: 700 1.05rem/1.3 var(--serif); margin: 24px 0 6px; }
+  ul.points { margin: 0; padding-left: 20px; } ul.points li { margin: 5px 0; }
+  .reply { background: var(--sky); border-radius: 8px; padding: 14px 16px; white-space: pre-wrap; font-family: var(--serif); font-size: 1rem; line-height: 1.6; }
+  .reply-actions { margin-top: 8px; display: flex; gap: 12px; align-items: center; color: var(--muted); font-size: .85rem; }
+  .human { margin-top: 26px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
+  details.diff { margin-top: 24px; } details.diff summary { cursor: pointer; font: 700 1.05rem/1.3 var(--serif); }
+  pre.diffbox { margin: 8px 0 0; padding: 10px 0; background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; font: .78rem/1.5 var(--mono); max-height: 360px; overflow-y: auto; }
+  pre.diffbox span { display: block; padding: 0 12px; white-space: pre; }
+  .d-add { background: #e7f5ec; } .d-del { background: #f9e4ea; } .d-hunk { background: var(--sky); color: var(--sky-deep); }
+  .errbox { margin: 14px 0; padding: 12px 14px; background: var(--wine-soft); border-radius: 8px; color: var(--wine-deep); }
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--wine-deep); color: #fff; padding: 8px 16px; border-radius: 8px; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .toast.on { opacity: 1; }
+
+  footer { background: #fff; border-top: 1px solid var(--line); padding: 8px 20px; font-size: .8rem; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  footer a { color: var(--wine); }
+
+  @media (max-width: 800px) {
+    html, body { height: auto; }
+    .repo-form { flex-wrap: wrap; }
+    .repo-form input { flex-basis: 100%; }
+    .work { grid-template-columns: 1fr; }
+    .queue { max-height: 46vh; border-right: 0; border-bottom: 1px solid var(--line); }
+    .verdict h2 { font-size: 1.8rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s; } .toast { transition: none; } }
 </style>
 </head>
 <body>
-<header>
-  <h1>PRTriage</h1>
-  <p>Helps open-source maintainers sort pull requests. It recommends. You decide.</p>
+<header class="bar">
+  <div class="brand">PRTriage<small>A second pair of eyes on your pull requests</small></div>
+  <form class="repo-form" id="repo-form">
+    <input id="repo-url" type="url" placeholder="Paste a public GitHub repo link, e.g. https://github.com/owner/repo" aria-label="GitHub repository link">
+    <button class="btn btn-sun" id="load" type="submit">Load PRs</button>
+    <button class="btn btn-ghost" id="demo" type="button">Try demo PRs</button>
+  </form>
 </header>
-<main>
-  <div class="card banner">
-    The AI gives a recommendation with reasons. A human maintainer always makes the final call.
-    Do not paste private or personal data: this app sends your text to a hosted model.
-  </div>
+<div class="notice">PRTriage recommends. You decide. Text is sent to a hosted AI model, so use public repos or demo data only.</div>
 
-  <div class="card">
-    <div class="tabs">
-      <button class="tab active" id="tab-sample" type="button">Try a sample PR</button>
-      <button class="tab" id="tab-paste" type="button">Paste a PR</button>
-      <button class="tab" id="tab-url" type="button">GitHub URL</button>
+<main class="work">
+  <section class="queue" aria-label="Pull request queue">
+    <div class="queue-head">
+      <div><h2 id="queue-title">Pull requests</h2><div class="sub" id="queue-sub">Nothing loaded yet</div></div>
+      <button class="btn btn-wine" id="all" type="button" hidden>Triage all</button>
     </div>
-
-    <div id="panel-sample">
-      <label for="sample-select">Synthetic test PRs (written by the team)</label>
-      <select id="sample-select"></select>
+    <ul class="rows" id="rows"></ul>
+    <div class="queue-empty" id="queue-empty">
+      <strong>No pull requests yet</strong>
+      Paste a repo link above and press Load PRs. No GitHub repo handy? Try the demo PRs.
     </div>
+    <details class="paste" id="paste">
+      <summary>Add a PR by pasting it</summary>
+      <label for="p-title">Title</label><input id="p-title">
+      <label for="p-body">Description</label><textarea id="p-body"></textarea>
+      <label for="p-contrib">CONTRIBUTING.md (optional)</label><textarea id="p-contrib"></textarea>
+      <label for="p-diff">Diff</label><textarea id="p-diff"></textarea>
+      <button class="btn btn-wine" id="p-add" type="button" style="margin-top:8px">Add and review</button>
+    </details>
+  </section>
 
-    <div id="panel-url" class="hidden">
-      <label for="url">Public pull request URL</label>
-      <input id="url" placeholder="https://github.com/OWNER/REPO/pull/1">
+  <section class="panel" id="panel" aria-live="polite">
+    <div class="panel-empty">
+      <h2>Pick a pull request</h2>
+      Its verdict appears here: why it looks good, what needs fixing, or why it shouldn't be accepted,
+      plus a reply you can send to the contributor.
     </div>
-
-    <div id="panel-fields">
-      <label for="title">Title</label><input id="title">
-      <label for="body">Description</label><textarea id="body"></textarea>
-      <label for="contributing">CONTRIBUTING.md (optional)</label><textarea id="contributing"></textarea>
-      <label for="diff">Diff</label><textarea id="diff" style="min-height:160px"></textarea>
-    </div>
-
-    <button id="go" type="button">Triage this PR</button>
-    <div id="error" class="error hidden"></div>
-  </div>
-
-  <div id="result" class="card hidden" aria-live="polite">
-    <span id="verdict" class="verdict"></span>
-    <span id="confidence" class="meta"></span>
-    <div id="injection" class="warn hidden">Warning: this PR contains text that tries to instruct the reviewer or the AI. Review it by hand.</div>
-    <div id="truncated" class="meta hidden">The diff was long and was truncated before judging.</div>
-    <h3>Reasons</h3><ul id="reasons"></ul>
-    <div id="concerns-wrap"><h3>Concerns</h3><ul id="concerns"></ul></div>
-    <div id="reply-wrap"><h3>Suggested reply</h3><div id="reply" class="reply"></div></div>
-    <p id="signals" class="meta"></p>
-  </div>
+  </section>
 </main>
+
 <footer>
-  Powered by <strong id="model">…</strong> ·
-  <a id="lic" href="#" target="_blank" rel="noopener">Model licence (Apache 2.0)</a> ·
+  <span>Powered by <strong id="model">…</strong></span>
+  <a id="lic" href="#" target="_blank" rel="noopener">Model licence (Apache 2.0)</a>
   <a id="terms" href="#" target="_blank" rel="noopener">Gemini API terms</a>
+  <a href="https://github.com/NjeriCodeCraft/prtriage" target="_blank" rel="noopener">Source code (MIT)</a>
 </footer>
+<div class="toast" id="toast" role="status"></div>
 
 <script>
 const $ = (id) => document.getElementById(id);
-let mode = "sample", samples = [];
+const LABEL = { looks_legit: "Looks legit", needs_fixes: "Needs fixes", low_effort: "Low effort", unsure: "Unsure, review manually" };
+let items = [], selected = null, repoCtx = null;
 
-function setMode(m) {
-  mode = m;
-  for (const k of ["sample", "paste", "url"]) $("tab-" + k).classList.toggle("active", k === m);
-  $("panel-sample").classList.toggle("hidden", m !== "sample");
-  $("panel-url").classList.toggle("hidden", m !== "url");
-  $("panel-fields").classList.toggle("hidden", m === "url");
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v; else if (k === "text") e.textContent = v; else e.setAttribute(k, v);
+  }
+  for (const kid of kids) if (kid) e.append(kid);
+  return e;
 }
-["sample", "paste", "url"].forEach((m) => $("tab-" + m).addEventListener("click", () => setMode(m)));
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("on"); setTimeout(() => t.classList.remove("on"), 1600); }
 
-function fillSample() {
-  const s = samples.find((x) => x.id === $("sample-select").value);
-  if (!s) return;
-  $("title").value = s.title; $("body").value = s.body;
-  $("contributing").value = s.contributing || ""; $("diff").value = s.diff;
-}
-$("sample-select").addEventListener("change", fillSample);
-
-function list(id, items) {
-  const ul = $(id); ul.replaceChildren();
-  for (const t of items) { const li = document.createElement("li"); li.textContent = t; ul.appendChild(li); }
-}
-
-function show(r) {
-  $("result").classList.remove("hidden");
-  const v = $("verdict"); v.textContent = r.verdict_label; v.className = "verdict v-" + r.verdict;
-  $("confidence").textContent = r.error ? "" : " confidence " + Math.round(r.confidence * 100) + "%";
-  $("injection").classList.toggle("hidden", !r.injection_detected);
-  $("truncated").classList.toggle("hidden", !r.diff_truncated);
-  list("reasons", r.reasons); list("concerns", r.concerns);
-  $("concerns-wrap").classList.toggle("hidden", !r.concerns.length);
-  $("reply").textContent = r.suggested_reply;
-  $("reply-wrap").classList.toggle("hidden", !r.suggested_reply);
-  const age = r.signals && r.signals.author_account_age_days;
-  $("signals").textContent = age != null ? "Context only (not used for the verdict): author account is " + age + " days old." : "";
-  if (r.error) showError("Could not get a reliable judgement: " + r.error);
+/* ---------- queue ---------- */
+function renderQueue() {
+  const rows = $("rows"); rows.replaceChildren();
+  $("queue-empty").hidden = items.length > 0;
+  $("all").hidden = items.length === 0;
+  for (const it of items) {
+    const meta = el("div", { class: "m" });
+    if (it.status === "loading") meta.append(el("span", { class: "spin" }), el("span", { text: "Reviewing…" }));
+    else if (it.result && !it.error) meta.append(el("span", { class: "chip s-" + it.result.verdict, text: LABEL[it.result.verdict] }));
+    else if (it.error) meta.append(el("span", { class: "chip s-unsure", text: "Unsure, review manually" }));
+    else meta.append(el("span", { text: "Not reviewed yet" }));
+    if (it.num) meta.append(el("span", { text: "#" + it.num }));
+    const cls = "row" + (it.result ? " s-" + it.result.verdict : it.error ? " s-unsure" : "");
+    const b = el("button", { class: cls, type: "button" }, el("span", { class: "t", text: it.title || "(no title)" }), meta);
+    if (it.id === selected) b.setAttribute("aria-current", "true");
+    b.addEventListener("click", () => select(it.id));
+    rows.append(el("li", {}, b));
+  }
+  const done = items.filter((i) => i.result).length;
+  $("queue-sub").textContent = items.length ? `${items.length} pull requests, ${done} reviewed` : "Nothing loaded yet";
+  $("queue-title").textContent = repoCtx ? repoCtx : "Pull requests";
 }
 
-function showError(msg) { const e = $("error"); e.textContent = msg; e.classList.remove("hidden"); }
+function setItems(list, title) { items = list; selected = null; repoCtx = title; renderQueue(); showEmptyPanel(); }
 
-$("go").addEventListener("click", async () => {
-  $("error").classList.add("hidden"); $("result").classList.add("hidden");
-  const btn = $("go"); btn.disabled = true; btn.textContent = "Triaging…";
+/* ---------- loading sources ---------- */
+$("repo-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const url = $("repo-url").value.trim(); if (!url) return;
+  const b = $("load"); b.disabled = true; b.textContent = "Loading…";
   try {
-    const isUrl = mode === "url";
-    const res = await fetch(isUrl ? "/api/triage-url" : "/api/triage-text", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(isUrl ? { url: $("url").value } : {
-        title: $("title").value, body: $("body").value, diff: $("diff").value,
-        contributing: $("contributing").value || null }),
-    });
+    const res = await fetch("/api/repo-prs?url=" + encodeURIComponent(url));
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Request failed");
-    show(data);
-  } catch (e) { showError(String(e.message || e)); }
-  finally { btn.disabled = false; btn.textContent = "Triage this PR"; }
+    if (!res.ok) throw new Error(data.detail || "Could not load that repository.");
+    if (!data.prs.length) { setItems([], data.owner + "/" + data.repo); showMessage("This repository has no open pull requests."); return; }
+    setItems(data.prs.map((p) => ({ id: "u" + p.number, kind: "url", num: p.number, title: p.title, url: p.url, status: "idle" })), data.owner + "/" + data.repo);
+  } catch (err) { showMessage(String(err.message || err), true); }
+  finally { b.disabled = false; b.textContent = "Load PRs"; }
 });
 
+$("demo").addEventListener("click", async () => {
+  const list = await (await fetch("/api/samples")).json();
+  setItems(list.map((s) => ({ id: "s" + s.id, kind: "text", title: s.label, prTitle: s.title, body: s.body, diff: s.diff, contributing: s.contributing, status: "idle" })), "Demo PRs");
+});
+
+$("p-add").addEventListener("click", () => {
+  const title = $("p-title").value.trim(), diff = $("p-diff").value;
+  if (!title && !diff.trim()) { toast("Add a title or a diff first"); return; }
+  const it = { id: "p" + Date.now(), kind: "text", title: title || "Pasted PR", prTitle: title, body: $("p-body").value, diff, contributing: $("p-contrib").value || null, status: "idle" };
+  items.unshift(it); renderQueue(); select(it.id);
+});
+
+/* ---------- triage ---------- */
+async function triageItem(it) {
+  if (it.result || it.status === "loading") return;
+  it.status = "loading"; it.error = null; renderQueue();
+  try {
+    const isUrl = it.kind === "url";
+    const res = await fetch(isUrl ? "/api/triage-url" : "/api/triage-text", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(isUrl ? { url: it.url } : { title: it.prTitle || "", body: it.body || "", diff: it.diff || "", contributing: it.contributing }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "The request failed.");
+    it.result = data;
+    if (data.diff_preview) it.diff = data.diff_preview;
+  } catch (err) { it.error = String(err.message || err); }
+  it.status = "done"; renderQueue();
+  if (selected === it.id) renderPanel(it);
+}
+
+async function select(id) {
+  selected = id; renderQueue();
+  const it = items.find((i) => i.id === id); if (!it) return;
+  renderPanel(it);
+  await triageItem(it);
+}
+
+$("all").addEventListener("click", async () => {
+  const b = $("all"); b.disabled = true;
+  const todo = items.filter((i) => !i.result);
+  let next = 0;
+  const worker = async () => { while (next < todo.length) await triageItem(todo[next++]); };
+  await Promise.all([worker(), worker()]);   // two at a time keeps us gentle on the rate limits
+  b.disabled = false; toast("All reviewed");
+});
+
+/* ---------- review panel ---------- */
+function showEmptyPanel() {
+  $("panel").replaceChildren(el("div", { class: "panel-empty" }, el("h2", { text: "Pick a pull request" }),
+    document.createTextNode("Its verdict appears here: why it looks good, what needs fixing, or why it shouldn't be accepted, plus a reply you can send to the contributor.")));
+}
+function showMessage(msg, isError) {
+  $("panel").replaceChildren(el("div", { class: "panel-empty" }, el("h2", { text: isError ? "That didn't work" : "Nothing to review" }), document.createTextNode(msg)));
+}
+
+function diffBox(text) {
+  const pre = el("pre", { class: "diffbox" });
+  for (const line of text.split("\n").slice(0, 400)) {
+    let c = "";
+    if (line.startsWith("+") && !line.startsWith("+++")) c = "d-add";
+    else if (line.startsWith("-") && !line.startsWith("---")) c = "d-del";
+    else if (line.startsWith("@@")) c = "d-hunk";
+    pre.append(el("span", { class: c, text: line || " " }));
+  }
+  return pre;
+}
+
+function renderPanel(it) {
+  const p = $("panel"); p.replaceChildren();
+  if (it.status === "loading" || (!it.result && !it.error)) {
+    p.append(el("div", { class: "panel-empty" }, el("h2", { text: "Reviewing…" }), document.createTextNode("Gemma is reading the description, the diff and the project's contribution rules.")));
+    return;
+  }
+  if (it.error && !it.result) {
+    p.append(el("div", { class: "verdict v-unsure" }, el("h2", { text: LABEL.unsure })),
+      el("div", { class: "body" }, el("div", { class: "errbox", text: "Could not review this pull request. " + it.error }),
+        el("button", { class: "btn btn-wine", type: "button", text: "Try again" })));
+    p.querySelector("button").addEventListener("click", () => { it.error = null; it.status = "idle"; renderPanel(it); triageItem(it); });
+    return;
+  }
+  const r = it.result;
+  const head = el("div", { class: "verdict v-" + r.verdict }, el("h2", { text: r.verdict_label }),
+    el("div", { class: "conf", text: r.error ? "No reliable judgement" : "Confidence " + Math.round(r.confidence * 100) + "%" }));
+  const body = el("div", { class: "body" });
+  const title = el("div", { class: "pr-title" });
+  if (it.url) title.append(el("a", { href: it.url, target: "_blank", rel: "noopener", text: "#" + it.num + "  " + it.title })); else title.textContent = it.prTitle || it.title;
+  body.append(title);
+
+  if (r.error) body.append(el("div", { class: "errbox", text: "The model could not give a reliable answer: " + r.error }));
+  if (r.injection_detected) body.append(el("div", { class: "alert", text: "This pull request contains text that tries to instruct the reviewer or the AI. Read it yourself before deciding." }));
+  if (r.diff_truncated) body.append(el("div", { class: "alert soft", text: "The diff was long, so only the first part was judged." }));
+
+  body.append(el("h3", { text: "Why" }));
+  const ul = el("ul", { class: "points" }); r.reasons.forEach((x) => ul.append(el("li", { text: x }))); body.append(ul);
+  if (r.concerns.length) { body.append(el("h3", { text: "Watch out for" })); const u2 = el("ul", { class: "points" }); r.concerns.forEach((x) => u2.append(el("li", { text: x }))); body.append(u2); }
+
+  if (r.suggested_reply) {
+    body.append(el("h3", { text: "Reply you can send" }), el("div", { class: "reply", text: r.suggested_reply }));
+    const copy = el("button", { class: "btn btn-wine", type: "button", text: "Copy reply" });
+    copy.addEventListener("click", async () => { try { await navigator.clipboard.writeText(r.suggested_reply); toast("Reply copied"); } catch { toast("Select the text and copy it"); } });
+    body.append(el("div", { class: "reply-actions" }, copy, el("span", { text: "Edit it before you post. You know the contributor, the AI doesn't." })));
+  }
+
+  if (it.diff) { const d = el("details", { class: "diff" }, el("summary", { text: "Code changes" }), diffBox(it.diff)); body.append(d); }
+  const age = r.signals && r.signals.author_account_age_days;
+  if (age != null) body.append(el("p", { class: "human", text: "For context only, not used in the verdict: the author's account is " + age + " days old." }));
+  body.append(el("div", { class: "human", text: "This is a recommendation. You make the final call." }));
+  p.append(head, body);
+}
+
+/* ---------- footer ---------- */
 (async () => {
-  const cfg = await (await fetch("/api/config")).json();
-  $("model").textContent = cfg.model; $("lic").href = cfg.model_license_url; $("terms").href = cfg.gemini_api_terms_url;
-  samples = await (await fetch("/api/samples")).json();
-  const sel = $("sample-select");
-  for (const s of samples) { const o = document.createElement("option"); o.value = s.id; o.textContent = s.label; sel.appendChild(o); }
-  fillSample();
+  try {
+    const cfg = await (await fetch("/api/config")).json();
+    $("model").textContent = cfg.model; $("lic").href = cfg.model_license_url; $("terms").href = cfg.gemini_api_terms_url;
+  } catch { $("model").textContent = "(unavailable)"; }
 })();
 </script>
 </body>

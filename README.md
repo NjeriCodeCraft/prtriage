@@ -18,7 +18,9 @@ A volunteer maintainer of a small or mid-sized open-source project who gets more
 
 ## Original contribution
 
-Paste a PR, pick a sample, or give a public PR URL. PRTriage sends the title, description, diff and the repo's
+Give PRTriage a **public GitHub repo link**. It lists the open pull requests as a queue on the left; click one and a
+**review panel** on the right shows the verdict, the reasons and a reply to send. (You can also try the built-in demo PRs
+or paste a PR by hand.) For each PR, PRTriage sends the title, description, diff and the repo's
 `CONTRIBUTING.md` to **Gemma 4**, which returns:
 
 1. a verdict: **Looks legit**, **Needs fixes**, **Low effort**, or **Unsure, review manually**
@@ -35,11 +37,18 @@ What makes it different from a generic "summarize this PR" tool:
 - **Honest about uncertainty.** If Gemma fails, returns unusable output, or the PR is ambiguous, the app says
   "Unsure, review manually" rather than guessing.
 
+## How to use it
+
+1. Open the app and paste a public repo link (for example your own test repo), then press **Load PRs**. No repo handy? Press **Try demo PRs**.
+2. Click a pull request, or press **Triage all**. Gemma reads the description, the diff and the repo's `CONTRIBUTING.md`.
+3. Read the side panel: the verdict (Looks legit, Needs fixes, Low effort, Unsure), why, what to watch out for, and a reply you can copy.
+4. You decide. The tool never merges, closes or comments on anything.
+
 ## Architecture
 
 ```mermaid
 flowchart LR
-    U[Maintainer in browser] -->|sample / pasted PR / GitHub URL| API[FastAPI app on PrimeCloud]
+    U[Maintainer in browser] -->|repo link / demo PR / pasted PR| API[FastAPI app on PrimeCloud]
     API -->|public PR URLs only| GH[GitHub REST API]
     GH -->|title, body, diff, CONTRIBUTING.md| API
     API --> T[Truncate + wrap in untrusted delimiters]
@@ -101,7 +110,7 @@ python scripts/run_eval.py   # REAL Gemma run on the 8 samples, writes docs/TEST
 ```
 
 - **Unit tests** (fake model) check our own logic: JSON parsing and validation, truncation, the injection tripwire,
-  failure handling, and the API. **Last run: 25 passed in 0.62s** (Python 3.13). Not yet run on Python 3.11 locally; the Dockerfile targets 3.11.
+  failure handling, and the API. **Last run: 36 passed in 0.27s** (Python 3.13). Not yet run on Python 3.11 locally; the Dockerfile targets 3.11.
 - **Live Gemma results** for the three cases judges ask about (normal, edge, failure/uncertainty) plus prompt injection
   are in [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md). **Status: not run yet.** Nothing is claimed as passed until it is.
 
@@ -111,7 +120,8 @@ python scripts/run_eval.py   # REAL Gemma run on the 8 samples, writes docs/TEST
 - Long diffs are truncated (default 12,000 characters); the app tells the user when that happens.
 - Gemma can be wrong. Treat verdicts as a recommendation and read the reasons.
 - Prompt-injection defence reduces risk but is not a guarantee. The code-side tripwire only catches known phrasings.
-- GitHub URL mode is subject to GitHub's unauthenticated rate limit unless `GITHUB_TOKEN` is set.
+- Repo mode uses the GitHub API. Without `GITHUB_TOKEN` the limit is 60 requests per hour and each PR costs about 3 to 5 requests, so set a token (read-only, no scopes) for anything beyond a few PRs.
+- A PR that tries to steer the AI gets no suggested reply, by design.
 - English-language PRs only were tested.
 
 ## AI Tools Used

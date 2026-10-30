@@ -134,6 +134,8 @@ def test_successful_injection_is_downgraded_from_looks_legit():
                model_call=lambda p: reply("looks_legit"))
     assert r.verdict == "unsure" and r.injection_detected
     assert any("Downgraded" in c for c in r.concerns)
+    assert r.confidence <= 0.5
+    assert r.suggested_reply == ""  # no model-written reply is offered for a PR that tried to steer the AI
 
 
 def test_clean_pr_is_not_flagged():
@@ -185,4 +187,38 @@ def test_api_without_key_returns_unsure(monkeypatch):
 
 def test_bad_github_url_is_a_400():
     r = TestClient(main.app).post("/api/triage-url", json={"url": "https://example.com/nope"})
+    assert r.status_code == 400
+
+
+# ---- Repo link mode ------------------------------------------------------
+from app.github_client import GitHubError, parse_repo_url  # noqa: E402
+
+
+@pytest.mark.parametrize("url,expected", [
+    ("https://github.com/owner/repo", ("owner", "repo")),
+    ("https://github.com/owner/repo/", ("owner", "repo")),
+    ("https://github.com/owner/repo.git", ("owner", "repo")),
+    ("https://github.com/owner/repo/pull/12", ("owner", "repo")),
+    ("https://github.com/owner/my.repo-name/pulls", ("owner", "my.repo-name")),
+])
+def test_parse_repo_url(url, expected):
+    assert parse_repo_url(url) == expected
+
+
+@pytest.mark.parametrize("url", ["", "not a url", "https://gitlab.com/o/r", "https://github.com/onlyowner"])
+def test_parse_repo_url_rejects(url):
+    with pytest.raises(GitHubError):
+        parse_repo_url(url)
+
+
+def test_repo_prs_endpoint(monkeypatch):
+    fake = {"owner": "o", "repo": "r", "prs": [{"number": 1, "title": "t", "url": "https://github.com/o/r/pull/1",
+                                                "draft": False, "updated_at": None}]}
+    monkeypatch.setattr(main, "list_open_prs", lambda url: fake)
+    r = TestClient(main.app).get("/api/repo-prs", params={"url": "https://github.com/o/r"})
+    assert r.status_code == 200 and r.json()["prs"][0]["number"] == 1
+
+
+def test_repo_prs_bad_url_is_400():
+    r = TestClient(main.app).get("/api/repo-prs", params={"url": "nope"})
     assert r.status_code == 400
