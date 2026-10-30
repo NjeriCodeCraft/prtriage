@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PRTriage</title>
+<style>
+  :root {
+    --burgundy: #6d1a36; --burgundy-dark: #4a1124;
+    --blue: #dbe9f6; --blue-deep: #3d6a94;
+    --yellow: #f6d860; --bg: #faf7f8; --ink: #2a1a20; --card: #fff; --line: #e6dde0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  header { background: var(--burgundy); color: #fff; padding: 20px 16px; }
+  header h1 { margin: 0; font-size: 1.5rem; }
+  header p { margin: 4px 0 0; color: var(--blue); }
+  main { max-width: 860px; margin: 0 auto; padding: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .banner { background: #fff8dc; border-left: 4px solid var(--yellow); padding: 10px 12px; border-radius: 6px; font-size: .9rem; }
+  label { display: block; font-weight: 600; margin: 12px 0 4px; }
+  input, textarea, select { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+  textarea { min-height: 90px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem; }
+  button { background: var(--burgundy); color: #fff; border: 0; padding: 10px 18px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; margin-top: 12px; }
+  button:hover { background: var(--burgundy-dark); }
+  button:disabled { opacity: .6; cursor: wait; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 8px; }
+  .tab { background: var(--blue); color: var(--burgundy-dark); margin: 0; }
+  .tab.active { background: var(--burgundy); color: #fff; }
+  .hidden { display: none; }
+  .verdict { display: inline-block; padding: 6px 14px; border-radius: 999px; font-weight: 700; font-size: 1.1rem; }
+  .v-looks_legit { background: #d8f0dc; color: #1c5a2b; }
+  .v-needs_fixes { background: var(--yellow); color: #5a4700; }
+  .v-low_effort { background: #f4d4dc; color: var(--burgundy-dark); }
+  .v-unsure { background: var(--blue); color: var(--blue-deep); }
+  .warn { background: #f4d4dc; border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+  .error { background: #f4d4dc; color: var(--burgundy-dark); padding: 10px 12px; border-radius: 8px; margin-top: 12px; }
+  .reply { white-space: pre-wrap; background: var(--blue); border-radius: 8px; padding: 10px 12px; }
+  .meta { color: #6b5a60; font-size: .85rem; }
+  footer { text-align: center; padding: 24px 16px; color: #6b5a60; font-size: .9rem; }
+  footer a { color: var(--burgundy); }
+  ul { margin: 6px 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>PRTriage</h1>
+  <p>Helps open-source maintainers sort pull requests. It recommends. You decide.</p>
+</header>
+<main>
+  <div class="card banner">
+    The AI gives a recommendation with reasons. A human maintainer always makes the final call.
+    Do not paste private or personal data: this app sends your text to a hosted model.
+  </div>
+
+  <div class="card">
+    <div class="tabs">
+      <button class="tab active" id="tab-sample" type="button">Try a sample PR</button>
+      <button class="tab" id="tab-paste" type="button">Paste a PR</button>
+      <button class="tab" id="tab-url" type="button">GitHub URL</button>
+    </div>
+
+    <div id="panel-sample">
+      <label for="sample-select">Synthetic test PRs (written by the team)</label>
+      <select id="sample-select"></select>
+    </div>
+
+    <div id="panel-url" class="hidden">
+      <label for="url">Public pull request URL</label>
+      <input id="url" placeholder="https://github.com/OWNER/REPO/pull/1">
+    </div>
+
+    <div id="panel-fields">
+      <label for="title">Title</label><input id="title">
+      <label for="body">Description</label><textarea id="body"></textarea>
+      <label for="contributing">CONTRIBUTING.md (optional)</label><textarea id="contributing"></textarea>
+      <label for="diff">Diff</label><textarea id="diff" style="min-height:160px"></textarea>
+    </div>
+
+    <button id="go" type="button">Triage this PR</button>
+    <div id="error" class="error hidden"></div>
+  </div>
+
+  <div id="result" class="card hidden" aria-live="polite">
+    <span id="verdict" class="verdict"></span>
+    <span id="confidence" class="meta"></span>
+    <div id="injection" class="warn hidden">Warning: this PR contains text that tries to instruct the reviewer or the AI. Review it by hand.</div>
+    <div id="truncated" class="meta hidden">The diff was long and was truncated before judging.</div>
+    <h3>Reasons</h3><ul id="reasons"></ul>
+    <div id="concerns-wrap"><h3>Concerns</h3><ul id="concerns"></ul></div>
+    <div id="reply-wrap"><h3>Suggested reply</h3><div id="reply" class="reply"></div></div>
+    <p id="signals" class="meta"></p>
+  </div>
+</main>
+<footer>
+  Powered by <strong id="model">…</strong> ·
+  <a id="lic" href="#" target="_blank" rel="noopener">Model licence (Apache 2.0)</a> ·
+  <a id="terms" href="#" target="_blank" rel="noopener">Gemini API terms</a>
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let mode = "sample", samples = [];
+
+function setMode(m) {
+  mode = m;
+  for (const k of ["sample", "paste", "url"]) $("tab-" + k).classList.toggle("active", k === m);
+  $("panel-sample").classList.toggle("hidden", m !== "sample");
+  $("panel-url").classList.toggle("hidden", m !== "url");
+  $("panel-fields").classList.toggle("hidden", m === "url");
+}
+["sample", "paste", "url"].forEach((m) => $("tab-" + m).addEventListener("click", () => setMode(m)));
+
+function fillSample() {
+  const s = samples.find((x) => x.id === $("sample-select").value);
+  if (!s) return;
+  $("title").value = s.title; $("body").value = s.body;
+  $("contributing").value = s.contributing || ""; $("diff").value = s.diff;
+}
+$("sample-select").addEventListener("change", fillSample);
+
+function list(id, items) {
+  const ul = $(id); ul.replaceChildren();
+  for (const t of items) { const li = document.createElement("li"); li.textContent = t; ul.appendChild(li); }
+}
+
+function show(r) {
+  $("result").classList.remove("hidden");
+  const v = $("verdict"); v.textContent = r.verdict_label; v.className = "verdict v-" + r.verdict;
+  $("confidence").textContent = r.error ? "" : " confidence " + Math.round(r.confidence * 100) + "%";
+  $("injection").classList.toggle("hidden", !r.injection_detected);
+  $("truncated").classList.toggle("hidden", !r.diff_truncated);
+  list("reasons", r.reasons); list("concerns", r.concerns);
+  $("concerns-wrap").classList.toggle("hidden", !r.concerns.length);
+  $("reply").textContent = r.suggested_reply;
+  $("reply-wrap").classList.toggle("hidden", !r.suggested_reply);
+  const age = r.signals && r.signals.author_account_age_days;
+  $("signals").textContent = age != null ? "Context only (not used for the verdict): author account is " + age + " days old." : "";
+  if (r.error) showError("Could not get a reliable judgement: " + r.error);
+}
+
+function showError(msg) { const e = $("error"); e.textContent = msg; e.classList.remove("hidden"); }
+
+$("go").addEventListener("click", async () => {
+  $("error").classList.add("hidden"); $("result").classList.add("hidden");
+  const btn = $("go"); btn.disabled = true; btn.textContent = "Triaging…";
+  try {
+    const isUrl = mode === "url";
+    const res = await fetch(isUrl ? "/api/triage-url" : "/api/triage-text", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(isUrl ? { url: $("url").value } : {
+        title: $("title").value, body: $("body").value, diff: $("diff").value,
+        contributing: $("contributing").value || null }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Request failed");
+    show(data);
+  } catch (e) { showError(String(e.message || e)); }
+  finally { btn.disabled = false; btn.textContent = "Triage this PR"; }
+});
+
+(async () => {
+  const cfg = await (await fetch("/api/config")).json();
+  $("model").textContent = cfg.model; $("lic").href = cfg.model_license_url; $("terms").href = cfg.gemini_api_terms_url;
+  samples = await (await fetch("/api/samples")).json();
+  const sel = $("sample-select");
+  for (const s of samples) { const o = document.createElement("option"); o.value = s.id; o.textContent = s.label; sel.appendChild(o); }
+  fillSample();
+})();
+</script>
+</body>
+</html>
