@@ -68,6 +68,8 @@ flowchart LR
 | `app/triage.py` | Pipeline: truncate, prompt, judge, tripwire, safe fallback to "unsure" |
 | `app/github_client.py` | Fetches a public PR, its diff and `CONTRIBUTING.md` |
 | `app/main.py` | FastAPI routes and the web UI (`app/static/index.html`) |
+| `app/ratelimit.py` | Per-client rate limit on the triage endpoints (`RATE_LIMIT_PER_MINUTE`, default 30) |
+| `scripts/create_test_repo.py` | Builds a real GitHub test repo with open PRs from the samples |
 | `samples/prs.json` | 8 synthetic PRs written by the team |
 
 ## Gemma 4 and licences
@@ -106,11 +108,12 @@ Docker: `docker build -t prtriage . && docker run -p 8000:8000 --env-file .env p
 
 ```bash
 pytest -v                    # unit tests, fake model, no key needed
+python scripts/create_test_repo.py --dry-run   # optional: builds the demo PR repo locally; drop --dry-run to create it on GitHub
 python scripts/run_eval.py   # REAL Gemma run on the 8 samples, writes docs/TEST_RESULTS.md (needs GEMINI_API_KEY)
 ```
 
 - **Unit tests** (fake model) check our own logic: JSON parsing and validation, truncation, the injection tripwire,
-  failure handling, and the API. **Last run: 36 passed in 0.27s** (Python 3.13). Not yet run on Python 3.11 locally; the Dockerfile targets 3.11.
+  failure handling, and the API. **Last run: 44 passed** (Python 3.13). Not yet run on Python 3.11 locally; the Dockerfile targets 3.11.
 - **Live Gemma results** for the three cases judges ask about (normal, edge, failure/uncertainty) plus prompt injection
   are in [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md). **Status: not run yet.** Nothing is claimed as passed until it is.
 
@@ -122,6 +125,7 @@ python scripts/run_eval.py   # REAL Gemma run on the 8 samples, writes docs/TEST
 - Prompt-injection defence reduces risk but is not a guarantee. The code-side tripwire only catches known phrasings.
 - Repo mode uses the GitHub API. Without `GITHUB_TOKEN` the limit is 60 requests per hour and each PR costs about 3 to 5 requests, so set a token (read-only, no scopes) for anything beyond a few PRs.
 - A PR that tries to steer the AI gets no suggested reply, by design.
+- Triage endpoints are rate limited per client, in memory. It resets on restart and is not shared across several server copies.
 - English-language PRs only were tested.
 
 ## AI Tools Used
@@ -137,6 +141,10 @@ Listed separately from Gemma, which is the product's model:
 ## Deployment on PrimeCloud
 
 See [docs/PRIMECLOUD.md](docs/PRIMECLOUD.md). Live URL: TODO.
+
+## Project files
+
+[CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), a PR template and a CI workflow (`.github/`) are included.
 
 ## Licence
 

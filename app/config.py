@@ -16,6 +16,8 @@ MAX_DIFF_CHARS = int(os.getenv("MAX_DIFF_CHARS", "12000"))
 MAX_BODY_CHARS = int(os.getenv("MAX_BODY_CHARS", "4000"))
 MAX_CONTRIBUTING_CHARS = int(os.getenv("MAX_CONTRIBUTING_CHARS", "4000"))
 GEMMA_TIMEOUT_SECONDS = int(os.getenv("GEMMA_TIMEOUT_SECONDS", "60"))
+# Max triage requests per client per minute (each one costs a Gemma call). 0 turns the limit off.
+RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "30"))
 
 MODEL_LICENSE_URL = "https://www.apache.org/licenses/LICENSE-2.0"
 GEMINI_API_TERMS_URL = "https://ai.google.dev/gemini-api/terms"

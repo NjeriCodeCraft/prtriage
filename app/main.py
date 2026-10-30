@@ -4,13 +4,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import config
+from .ratelimit import limit_triage
 from .github_client import GitHubError, fetch_pr, list_open_prs
 from .triage import triage
 
@@ -73,7 +74,7 @@ def repo_prs(url: str):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/triage-url")
+@app.post("/api/triage-url", dependencies=[Depends(limit_triage)])
 def triage_url(req: UrlRequest):
     try:
         pr = fetch_pr(req.url)
@@ -88,6 +89,6 @@ def triage_url(req: UrlRequest):
             "diff_preview": pr.diff[:8000], **result.to_dict()}
 
 
-@app.post("/api/triage-text")
+@app.post("/api/triage-text", dependencies=[Depends(limit_triage)])
 def triage_text(req: TextRequest):
     return triage(req.title, req.body, req.diff, req.contributing).to_dict()

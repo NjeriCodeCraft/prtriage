@@ -222,3 +222,50 @@ def test_repo_prs_endpoint(monkeypatch):
 def test_repo_prs_bad_url_is_400():
     r = TestClient(main.app).get("/api/repo-prs", params={"url": "nope"})
     assert r.status_code == 400
+
+
+# ---- Rate limit ----------------------------------------------------------
+from app.ratelimit import RateLimiter  # noqa: E402
+
+
+def test_limiter_blocks_after_limit_and_recovers():
+    now = [0.0]
+    lim = RateLimiter(2, window_seconds=60, clock=lambda: now[0])
+    assert lim.check("a") == 0 and lim.check("a") == 0
+    wait = lim.check("a")
+    assert 1 <= wait <= 61
+    assert lim.check("b") == 0          # other clients are unaffected
+    now[0] = 61.0
+    assert lim.check("a") == 0          # window has passed
+
+
+def test_limiter_zero_means_off():
+    lim = RateLimiter(0)
+    assert all(lim.check("a") == 0 for _ in range(100))
+
+
+def test_triage_endpoint_returns_429_with_retry_after(monkeypatch):
+    from app import ratelimit
+
+    monkeypatch.setattr(ratelimit, "triage_limiter", RateLimiter(2))
+    monkeypatch.setattr("app.gemma.call_gemma", lambda p: reply())
+    client = TestClient(main.app)
+    body = {"title": "t", "body": "b", "diff": "+x"}
+    assert client.post("/api/triage-text", json=body).status_code == 200
+    assert client.post("/api/triage-text", json=body).status_code == 200
+    r = client.post("/api/triage-text", json=body)
+    assert r.status_code == 429
+    assert int(r.headers["retry-after"]) >= 1
+    assert "Too many" in r.json()["detail"]
+
+
+def test_limiter_uses_forwarded_ip(monkeypatch):
+    from app import ratelimit
+
+    monkeypatch.setattr(ratelimit, "triage_limiter", RateLimiter(1))
+    monkeypatch.setattr("app.gemma.call_gemma", lambda p: reply())
+    client = TestClient(main.app)
+    body = {"title": "t", "body": "b", "diff": "+x"}
+    assert client.post("/api/triage-text", json=body, headers={"x-forwarded-for": "1.1.1.1"}).status_code == 200
+    assert client.post("/api/triage-text", json=body, headers={"x-forwarded-for": "2.2.2.2"}).status_code == 200
+    assert client.post("/api/triage-text", json=body, headers={"x-forwarded-for": "1.1.1.1, 9.9.9.9"}).status_code == 429
