@@ -38,7 +38,7 @@ def main() -> int:
                        f"- Error: {r.error or 'none'}\n- Reasons: " + "; ".join(r.reasons) +
                        "\n- Concerns: " + ("; ".join(r.concerns) or "none") + "\n")
 
-    out = ROOT / "docs" / "TEST_RESULTS.md"
+    out = ROOT.parent / "docs" / "TEST_RESULTS.md"
     out.write_text(
         f"# Test results (live Gemma run)\n\nModel: `{config.MODEL_ID}`  \nRun at: {datetime.now(timezone.utc).isoformat()}\n\n"
         "These are the real outputs from the hosted model on the synthetic sample PRs in `samples/prs.json`.\n"

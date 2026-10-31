@@ -278,7 +278,7 @@ def test_config_js_is_served_and_defaults_to_same_origin():
 
 
 def test_page_calls_api_through_the_configurable_base():
-    html = (Path(__file__).resolve().parent.parent / "app" / "static" / "index.html").read_text(encoding="utf-8")
+    html = (Path(__file__).resolve().parent.parent.parent / "frontend" / "index.html").read_text(encoding="utf-8")
     assert 'src="config.js"' in html
     assert 'fetch("/api/' not in html          # every call must go through API + "/api/..."
     assert html.count('API + ') >= 4
@@ -287,3 +287,10 @@ def test_page_calls_api_through_the_configurable_base():
 def test_cors_allows_a_separately_hosted_page():
     r = TestClient(main.app).get("/api/config", headers={"Origin": "https://njericodecraft.github.io"})
     assert r.headers.get("access-control-allow-origin") == "*"
+
+
+def test_root_is_json_when_no_frontend_folder(monkeypatch, tmp_path):
+    monkeypatch.setattr(main, "FRONTEND", tmp_path / "missing")
+    client = TestClient(main.app)
+    assert client.get("/").json()["service"] == "PRTriage API"
+    assert client.get("/config.js").status_code == 404

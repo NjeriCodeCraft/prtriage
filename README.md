@@ -4,7 +4,7 @@
 
 - **Live URL:** TODO (add after PrimeCloud deployment, see [docs/PRIMECLOUD.md](docs/PRIMECLOUD.md))
 - **Categories entered:** Gemma 4 · Open-Source AI · PrimeCloud
-- **Model:** `gemma-4-26b-a4b-it` via the Gemini API (set in one line in [`app/config.py`](app/config.py), shown in the app footer)
+- **Model:** `gemma-4-26b-a4b-it` via the Gemini API (set in one line in [`backend/app/config.py`](app/config.py), shown in the app footer)
 
 ## Problem
 
@@ -62,15 +62,15 @@ flowchart LR
 
 | File | Role |
 |---|---|
-| `app/config.py` | All settings. **The Gemma 4 model ID is set on one line here.** |
-| `app/prompts.py` | System prompt (with injection guard) and untrusted-data wrapping |
-| `app/gemma.py` | Gemini API call, JSON extraction and validation, one retry |
-| `app/triage.py` | Pipeline: truncate, prompt, judge, tripwire, safe fallback to "unsure" |
-| `app/github_client.py` | Fetches a public PR, its diff and `CONTRIBUTING.md` |
-| `app/main.py` | FastAPI routes and the web UI (`app/static/index.html`) |
-| `app/ratelimit.py` | Per-client rate limit on the triage endpoints (`RATE_LIMIT_PER_MINUTE`, default 30) |
-| `scripts/create_test_repo.py` | Builds a real GitHub test repo with open PRs from the samples |
-| `samples/prs.json` | 8 synthetic PRs written by the team |
+| `backend/app/config.py` | All settings. **The Gemma 4 model ID is set on one line here.** |
+| `backend/app/prompts.py` | System prompt (with injection guard) and untrusted-data wrapping |
+| `backend/app/gemma.py` | Gemini API call, JSON extraction and validation, one retry |
+| `backend/app/triage.py` | Pipeline: truncate, prompt, judge, tripwire, safe fallback to "unsure" |
+| `backend/app/github_client.py` | Fetches a public PR, its diff and `CONTRIBUTING.md` |
+| `backend/app/main.py` | FastAPI routes and the web UI (`backend/app/static/index.html`) |
+| `backend/app/ratelimit.py` | Per-client rate limit on the triage endpoints (`RATE_LIMIT_PER_MINUTE`, default 30) |
+| `backend/scripts/create_test_repo.py` | Builds a real GitHub test repo with open PRs from the samples |
+| `backend/samples/prs.json` | 8 synthetic PRs written by the team |
 
 ## Gemma 4 and licences
 
@@ -83,7 +83,7 @@ flowchart LR
 
 The hosted terms say not to send personal or sensitive data to unpaid services. Therefore:
 
-- All demo and test data is **synthetic**: 8 PRs written by the team for a fictional library (`samples/prs.json`).
+- All demo and test data is **synthetic**: 8 PRs written by the team for a fictional library (`backend/samples/prs.json`).
 - No real contributor's name, username or private repo is used in the demo, README or slides.
 - The GitHub URL mode reads **public** PRs only and is for the maintainer's own use. Do not point it at private code.
 
@@ -95,6 +95,7 @@ Python 3.11+, `fastapi`, `uvicorn`, `httpx`, `google-genai`, `python-dotenv`, `p
 
 ```bash
 git clone https://github.com/NjeriCodeCraft/prtriage.git && cd prtriage
+cd backend
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 cp .env.example .env        # then put your GEMINI_API_KEY in .env
@@ -102,7 +103,7 @@ uvicorn app.main:app --reload
 # open http://localhost:8000
 ```
 
-Docker: `docker build -t prtriage . && docker run -p 8000:8000 --env-file .env prtriage`
+Docker (from `backend/`): `docker build -t prtriage . && docker run -p 8000:8000 --env-file .env prtriage`
 
 ## Tests
 
@@ -113,7 +114,7 @@ python scripts/run_eval.py   # REAL Gemma run on the 8 samples, writes docs/TEST
 ```
 
 - **Unit tests** (fake model) check our own logic: JSON parsing and validation, truncation, the injection tripwire,
-  failure handling, and the API. **Last run: 47 passed** (Python 3.13). Not yet run on Python 3.11 locally; the Dockerfile targets 3.11.
+  failure handling, and the API. **Last run: 48 passed** (Python 3.13). Not yet run on Python 3.11 locally; the Dockerfile targets 3.11.
 - **Live Gemma results** for the three cases judges ask about (normal, edge, failure/uncertainty) plus prompt injection
   are in [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md). **Status: not run yet.** Nothing is claimed as passed until it is.
 
@@ -142,15 +143,21 @@ Listed separately from Gemma, which is the product's model:
 
 See [docs/PRIMECLOUD.md](docs/PRIMECLOUD.md). Live URL: TODO.
 
-## Hosting the page and the API separately
+## Repository layout and hosting
 
-The API (FastAPI) can be hosted on its own, and the web page (`app/static/`) on any static host such as GitHub Pages.
+```
+backend/    FastAPI API (Python). Deploy on PrimeCloud with Root directory = backend (uses backend/Dockerfile)
+frontend/   The web page (plain HTML/JS, no build step). Deploy on Vercel with Root Directory = frontend
+docs/       Notes and test results
+```
 
-1. Deploy the API (PrimeCloud). It also still serves the page itself at `/`.
-2. Edit `app/static/config.js` and set `window.PRTRIAGE_API_BASE = "https://YOUR-API-ADDRESS"` (no trailing slash).
-3. Repo Settings > Pages > Source: **GitHub Actions**. The workflow `.github/workflows/pages.yml` publishes `app/static` on every push.
+1. **Backend (PrimeCloud):** create the app from this repo with **Root directory `backend`**, set `GEMINI_API_KEY` and
+   `GEMMA_MODEL_ID` as environment variables, health check `/healthz`.
+2. **Frontend (Vercel):** import the repo, set **Root Directory** to `frontend`, no build command, no output directory.
+3. Put the API's public address in `frontend/config.js` (`window.PRTRIAGE_API_BASE = "https://..."`, no trailing slash) and push.
 
-CORS is open on the API, so a page on another address can call it.
+CORS is open on the API, so the page on another address can call it. For local development run the API from `backend/`;
+it also serves `../frontend` at `http://localhost:8000/`.
 
 ## Project files
 
