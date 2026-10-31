@@ -113,7 +113,7 @@ python scripts/run_eval.py   # REAL Gemma run on the 8 samples, writes docs/TEST
 ```
 
 - **Unit tests** (fake model) check our own logic: JSON parsing and validation, truncation, the injection tripwire,
-  failure handling, and the API. **Last run: 44 passed** (Python 3.13). Not yet run on Python 3.11 locally; the Dockerfile targets 3.11.
+  failure handling, and the API. **Last run: 47 passed** (Python 3.13). Not yet run on Python 3.11 locally; the Dockerfile targets 3.11.
 - **Live Gemma results** for the three cases judges ask about (normal, edge, failure/uncertainty) plus prompt injection
   are in [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md). **Status: not run yet.** Nothing is claimed as passed until it is.
 
@@ -141,6 +141,16 @@ Listed separately from Gemma, which is the product's model:
 ## Deployment on PrimeCloud
 
 See [docs/PRIMECLOUD.md](docs/PRIMECLOUD.md). Live URL: TODO.
+
+## Hosting the page and the API separately
+
+The API (FastAPI) can be hosted on its own, and the web page (`app/static/`) on any static host such as GitHub Pages.
+
+1. Deploy the API (PrimeCloud). It also still serves the page itself at `/`.
+2. Edit `app/static/config.js` and set `window.PRTRIAGE_API_BASE = "https://YOUR-API-ADDRESS"` (no trailing slash).
+3. Repo Settings > Pages > Source: **GitHub Actions**. The workflow `.github/workflows/pages.yml` publishes `app/static` on every push.
+
+CORS is open on the API, so a page on another address can call it.
 
 ## Project files
 

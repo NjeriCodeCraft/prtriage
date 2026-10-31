@@ -41,6 +41,11 @@ def index():
     return FileResponse(STATIC / "index.html")
 
 
+@app.get("/config.js")
+def config_js():
+    return FileResponse(STATIC / "config.js", media_type="application/javascript")
+
+
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
