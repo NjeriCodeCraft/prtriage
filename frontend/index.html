@@ -339,6 +339,7 @@
 
     .s-unsure { border-left-color: var(--unsure-border); }
     .chip.s-unsure { background: var(--unsure-bg); color: var(--unsure-ink); border-color: #bfdbfe; }
+    .chip.s-flag { background: #f6e3e9; color: #5b1330; border-color: #e9c7d2; }
 
     .pr-num {
       font-family: var(--mono);
@@ -537,6 +538,52 @@
       border-left-color: var(--unsure-border);
     }
 
+    /* ---------- Injection Spotlight ---------- */
+    .spotlight {
+      margin: 16px 0 0;
+      padding: 18px 20px 20px;
+      background: var(--bg-surface);
+      border: 1px solid #e9c7d2;
+      border-left: 5px solid #7a1f3d;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-md);
+    }
+    .spotlight-head { display: flex; gap: 12px; align-items: flex-start; }
+    .spot-icon { font-size: 1.5rem; line-height: 1.1; flex-shrink: 0; }
+    .spotlight h3 { margin: 0 0 4px; color: #7a1f3d; }
+    .spotlight-sub { margin: 0; color: var(--ink-secondary); font-size: 0.9rem; }
+    .spot-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
+    .spot-item {
+      background: #fbf4f6;
+      border: 1px solid #f0d9e0;
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+    }
+    .spot-where {
+      display: inline-block;
+      margin-bottom: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #7a1f3d;
+    }
+    .spot-text { font: 0.84rem/1.65 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+    mark.spot {
+      background: #fde68a;
+      color: #5b1330;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 4px;
+      animation: spot-pulse 2.2s ease-out 3;
+    }
+    @keyframes spot-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.7); }
+      70%  { box-shadow: 0 0 0 10px rgba(250, 204, 21, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(250, 204, 21, 0); }
+    }
+    .spot-note { margin: 12px 0 0; font-size: 0.82rem; color: var(--muted); }
+
     h3 {
       font: 700 0.85rem/1.3 var(--sans);
       text-transform: uppercase;
@@ -624,6 +671,8 @@
     .d-add { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; }
     .d-del { background: rgba(244, 63, 94, 0.2); color: #fda4af; }
     .d-hunk { background: rgba(59, 130, 246, 0.2); color: #93c5fd; font-weight: 600; }
+    .d-flag { box-shadow: inset 4px 0 0 #facc15; }
+    pre.diffbox mark.spot { color: #3b0d1f; }
 
     .errbox {
       margin: 16px 0;
@@ -703,6 +752,7 @@
     @media (prefers-reduced-motion: reduce) {
       .spin { animation-duration: 3s; }
       .toast, button { transition: none; }
+      mark.spot { animation: none; }
     }
   </style>
 </head>
@@ -741,6 +791,7 @@
     <line x1="12" y1="16" x2="12" y2="12"></line>
     <line x1="12" y1="8" x2="12.01" y2="8"></line>
   </svg>
+  <span>PR text you review here is sent to Google's Gemini API (hosted Gemma) to produce a verdict. Only public GitHub data is read. PRTriage recommends, you decide.</span>
 </div>
 
 <main class="work">
@@ -851,6 +902,7 @@
         meta.append(el("span", { class: "spin" }), el("span", { text: "Reviewing…" }));
       } else if (it.result && !it.error) {
         meta.append(el("span", { class: "chip s-" + it.result.verdict, text: LABEL[it.result.verdict] }));
+        if (it.result.injection_detected) meta.append(el("span", { class: "chip s-flag", text: "⚠ Injection" }));
       } else if (it.error) {
         meta.append(el("span", { class: "chip s-unsure", text: LABEL.unsure }));
       } else {
@@ -1028,14 +1080,90 @@
     );
   }
 
-  function diffBox(text) {
+  /* ---------- injection spotlight ---------- */
+  const WHERE = {
+    title: "In the title",
+    description: "In the description",
+    diff: "In the code changes",
+    contributing: "In CONTRIBUTING.md"
+  };
+
+  // Splits one line around the spotlighted phrases and wraps them in <mark>. Built from DOM nodes, never innerHTML.
+  function markPhrases(line, phrases) {
+    const lower = line.toLowerCase();
+    const hits = [];
+    for (const ph of phrases) {
+      const needle = ph.toLowerCase();
+      if (!needle) continue;
+      let at = lower.indexOf(needle);
+      while (at !== -1) {
+        hits.push([at, at + needle.length]);
+        at = lower.indexOf(needle, at + needle.length);
+      }
+    }
+    if (!hits.length) return null;
+    hits.sort((a, b) => a[0] - b[0]);
+    const nodes = [];
+    let pos = 0;
+    for (const [s, e] of hits) {
+      if (s < pos) continue; // overlaps a hit we already marked
+      if (s > pos) nodes.push(document.createTextNode(line.slice(pos, s)));
+      nodes.push(el("mark", { class: "spot", text: line.slice(s, e) }));
+      pos = e;
+    }
+    if (pos < line.length) nodes.push(document.createTextNode(line.slice(pos)));
+    return nodes;
+  }
+
+  function spotlightCard(matches) {
+    const list = el("ul", { class: "spot-list" });
+    for (const m of matches) {
+      const text = el("div", { class: "spot-text" });
+      text.append(
+        document.createTextNode(m.excerpt.slice(0, m.mark_start)),
+        el("mark", { class: "spot", text: m.excerpt.slice(m.mark_start, m.mark_end) }),
+        document.createTextNode(m.excerpt.slice(m.mark_end))
+      );
+      list.append(el("li", { class: "spot-item" }, el("span", { class: "spot-where", text: WHERE[m.field] || "In the PR" }), text));
+    }
+    return el(
+      "section",
+      { class: "spotlight", "aria-label": "Injection spotlight" },
+      el(
+        "div",
+        { class: "spotlight-head" },
+        el("span", { class: "spot-icon", "aria-hidden": "true", text: "🛡️" }),
+        el(
+          "div",
+          {},
+          el("h3", { text: "Injection spotlight" }),
+          el("p", {
+            class: "spotlight-sub",
+            text: "PRTriage never obeys text inside a pull request. These are the exact words that tried to steer the reviewer."
+          })
+        )
+      ),
+      list,
+      el("p", {
+        class: "spot-note",
+        text: "A match can be innocent (a docs page about prompts, say). That is why you decide, not the tool."
+      })
+    );
+  }
+
+  function diffBox(text, phrases = []) {
     const pre = el("pre", { class: "diffbox" });
     for (const line of text.split("\n").slice(0, 400)) {
       let c = "";
       if (line.startsWith("+") && !line.startsWith("+++")) c = "d-add";
       else if (line.startsWith("-") && !line.startsWith("---")) c = "d-del";
       else if (line.startsWith("@@")) c = "d-hunk";
-      pre.append(el("span", { class: c, text: line || " " }));
+      const parts = phrases.length ? markPhrases(line, phrases) : null;
+      if (parts) {
+        pre.append(el("span", { class: (c + " d-flag").trim() }, ...parts));
+      } else {
+        pre.append(el("span", { class: c, text: line || " " }));
+      }
     }
     return pre;
   }
@@ -1080,7 +1208,7 @@
             el("h2", { text: r.verdict_label }),
             el("div", {
               class: "conf",
-              text: r.error ? "No reliable judgement" : "Confidence " + Math.round(r.confidence * 100) + "%"
+              text: r.error ? "No reliable judgement" : "AI recommendation · you decide"
             })
     );
     const body = el("div", { class: "body" });
@@ -1101,6 +1229,7 @@
               })
       );
     }
+    if ((r.injection_matches || []).length) body.append(spotlightCard(r.injection_matches));
     if (r.diff_truncated) {
       body.append(el("div", { class: "alert soft", text: "ℹ️ Note: The diff was long, so only the first part was judged." }));
     }
@@ -1139,7 +1268,9 @@
     }
 
     if (it.diff) {
-      const d = el("details", { class: "diff" }, el("summary", { text: "Inspect code changes (diff)" }), diffBox(it.diff));
+      const diffPhrases = (r.injection_matches || []).filter((m) => m.field === "diff").map((m) => m.phrase);
+      const d = el("details", { class: "diff" }, el("summary", { text: "Inspect code changes (diff)" }), diffBox(it.diff, diffPhrases));
+      if (diffPhrases.length) d.open = true; // show the evidence straight away
       body.append(d);
     }
     const age = r.signals && r.signals.author_account_age_days;

@@ -27,6 +27,29 @@ def detect_injection(*texts: str) -> bool:
     return any(_INJECTION_RE.search(t or "") for t in texts)
 
 
+def find_injections(fields: dict[str, str | None], context: int = 70, limit: int = 5) -> list[dict]:
+    """Where did the tripwire fire? One entry per hit: which part of the PR, the exact phrase, and a short excerpt
+    around it with the phrase's position inside the excerpt, so the page can spotlight it.
+    Newlines become spaces one-for-one, so the positions stay correct."""
+    found: list[dict] = []
+    for name, text in fields.items():
+        text = text or ""
+        for m in _INJECTION_RE.finditer(text):
+            start, end = max(0, m.start() - context), min(len(text), m.end() + context)
+            lead, tail = ("…" if start > 0 else ""), ("…" if end < len(text) else "")
+            excerpt = lead + text[start:end].replace("\r", " ").replace("\n", " ") + tail
+            found.append({
+                "field": name,
+                "phrase": m.group(0),
+                "excerpt": excerpt,
+                "mark_start": len(lead) + (m.start() - start),
+                "mark_end": len(lead) + (m.end() - start),
+            })
+            if len(found) >= limit:
+                return found
+    return found
+
+
 def truncate(text: str, limit: int) -> tuple[str, bool]:
     if len(text) <= limit:
         return text, False
@@ -46,6 +69,7 @@ class TriageResult:
     model: str = config.MODEL_ID
     error: str | None = None
     signals: dict = field(default_factory=dict)  # displayed only, never used for the verdict
+    injection_matches: list = field(default_factory=list)  # where the tripwire fired, for the page's spotlight
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -83,7 +107,8 @@ def triage(title: str, body: str, diff: str, contributing: str | None,
     except GemmaError as exc:
         return _unsure(str(exc), diff_truncated, signals)
 
-    tripwire = detect_injection(title, body, diff, contributing or "")
+    matches = find_injections({"title": title, "description": body, "diff": diff, "contributing": contributing})
+    tripwire = bool(matches)
     verdict = j.verdict
     concerns = list(j.concerns)
     injection = j.injection_detected or tripwire
@@ -110,4 +135,5 @@ def triage(title: str, body: str, diff: str, contributing: str | None,
         suggested_reply=reply,
         diff_truncated=diff_truncated,
         signals=signals or {},
+        injection_matches=matches,
     )
