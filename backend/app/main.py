@@ -4,24 +4,25 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import config
+from .ratelimit import limit_triage
 from .github_client import GitHubError, fetch_pr, list_open_prs
 from .triage import triage
 
 ROOT = Path(__file__).resolve().parent.parent
-STATIC = Path(__file__).resolve().parent / "static"
+# The web page lives in ../frontend (hosted separately, e.g. Vercel). When that folder is next to this one
+# (local development), the API also serves it at "/" so one command runs everything.
+FRONTEND = ROOT.parent / "frontend"
 SAMPLES = ROOT / "samples" / "prs.json"
 
 app = FastAPI(title="PRTriage", description="AI-assisted pull request triage for open-source maintainers.")
 # Open CORS (no cookies, no credentials) so a browser extension or another page can call the API.
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"], allow_headers=["*"])
-app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
 class UrlRequest(BaseModel):
@@ -37,7 +38,16 @@ class TextRequest(BaseModel):
 
 @app.get("/")
 def index():
-    return FileResponse(STATIC / "index.html")
+    if (FRONTEND / "index.html").is_file():
+        return FileResponse(FRONTEND / "index.html")
+    return {"service": "PRTriage API", "docs": "/docs", "health": "/healthz"}
+
+
+@app.get("/config.js")
+def config_js():
+    if (FRONTEND / "config.js").is_file():
+        return FileResponse(FRONTEND / "config.js", media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="No frontend next to this API.")
 
 
 @app.get("/healthz")
@@ -73,7 +83,7 @@ def repo_prs(url: str):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/triage-url")
+@app.post("/api/triage-url", dependencies=[Depends(limit_triage)])
 def triage_url(req: UrlRequest):
     try:
         pr = fetch_pr(req.url)
@@ -88,6 +98,6 @@ def triage_url(req: UrlRequest):
             "diff_preview": pr.diff[:8000], **result.to_dict()}
 
 
-@app.post("/api/triage-text")
+@app.post("/api/triage-text", dependencies=[Depends(limit_triage)])
 def triage_text(req: TextRequest):
     return triage(req.title, req.body, req.diff, req.contributing).to_dict()

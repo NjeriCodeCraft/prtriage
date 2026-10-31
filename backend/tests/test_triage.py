@@ -222,3 +222,75 @@ def test_repo_prs_endpoint(monkeypatch):
 def test_repo_prs_bad_url_is_400():
     r = TestClient(main.app).get("/api/repo-prs", params={"url": "nope"})
     assert r.status_code == 400
+
+
+# ---- Rate limit ----------------------------------------------------------
+from app.ratelimit import RateLimiter  # noqa: E402
+
+
+def test_limiter_blocks_after_limit_and_recovers():
+    now = [0.0]
+    lim = RateLimiter(2, window_seconds=60, clock=lambda: now[0])
+    assert lim.check("a") == 0 and lim.check("a") == 0
+    wait = lim.check("a")
+    assert 1 <= wait <= 61
+    assert lim.check("b") == 0          # other clients are unaffected
+    now[0] = 61.0
+    assert lim.check("a") == 0          # window has passed
+
+
+def test_limiter_zero_means_off():
+    lim = RateLimiter(0)
+    assert all(lim.check("a") == 0 for _ in range(100))
+
+
+def test_triage_endpoint_returns_429_with_retry_after(monkeypatch):
+    from app import ratelimit
+
+    monkeypatch.setattr(ratelimit, "triage_limiter", RateLimiter(2))
+    monkeypatch.setattr("app.gemma.call_gemma", lambda p: reply())
+    client = TestClient(main.app)
+    body = {"title": "t", "body": "b", "diff": "+x"}
+    assert client.post("/api/triage-text", json=body).status_code == 200
+    assert client.post("/api/triage-text", json=body).status_code == 200
+    r = client.post("/api/triage-text", json=body)
+    assert r.status_code == 429
+    assert int(r.headers["retry-after"]) >= 1
+    assert "Too many" in r.json()["detail"]
+
+
+def test_limiter_uses_forwarded_ip(monkeypatch):
+    from app import ratelimit
+
+    monkeypatch.setattr(ratelimit, "triage_limiter", RateLimiter(1))
+    monkeypatch.setattr("app.gemma.call_gemma", lambda p: reply())
+    client = TestClient(main.app)
+    body = {"title": "t", "body": "b", "diff": "+x"}
+    assert client.post("/api/triage-text", json=body, headers={"x-forwarded-for": "1.1.1.1"}).status_code == 200
+    assert client.post("/api/triage-text", json=body, headers={"x-forwarded-for": "2.2.2.2"}).status_code == 200
+    assert client.post("/api/triage-text", json=body, headers={"x-forwarded-for": "1.1.1.1, 9.9.9.9"}).status_code == 429
+
+
+# ---- Separate frontend ---------------------------------------------------
+def test_config_js_is_served_and_defaults_to_same_origin():
+    r = TestClient(main.app).get("/config.js")
+    assert r.status_code == 200 and "PRTRIAGE_API_BASE" in r.text and 'PRTRIAGE_API_BASE = ""' in r.text
+
+
+def test_page_calls_api_through_the_configurable_base():
+    html = (Path(__file__).resolve().parent.parent.parent / "frontend" / "index.html").read_text(encoding="utf-8")
+    assert 'src="config.js"' in html
+    assert 'fetch("/api/' not in html          # every call must go through API + "/api/..."
+    assert html.count('API + ') >= 4
+
+
+def test_cors_allows_a_separately_hosted_page():
+    r = TestClient(main.app).get("/api/config", headers={"Origin": "https://njericodecraft.github.io"})
+    assert r.headers.get("access-control-allow-origin") == "*"
+
+
+def test_root_is_json_when_no_frontend_folder(monkeypatch, tmp_path):
+    monkeypatch.setattr(main, "FRONTEND", tmp_path / "missing")
+    client = TestClient(main.app)
+    assert client.get("/").json()["service"] == "PRTriage API"
+    assert client.get("/config.js").status_code == 404

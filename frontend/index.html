@@ -808,7 +808,9 @@
 </footer>
 <div class="toast" id="toast" role="status"></div>
 
+<script src="config.js"></script>
 <script>
+  const API = (window.PRTRIAGE_API_BASE || "").replace(/\/+$/, "");
   const $ = (id) => document.getElementById(id);
   const LABEL = {
     looks_legit: "✓ Looks legit",
@@ -885,7 +887,7 @@
     b.disabled = true;
     b.textContent = "Loading…";
     try {
-      const res = await fetch("/api/repo-prs?url=" + encodeURIComponent(url));
+      const res = await fetch(API + "/api/repo-prs?url=" + encodeURIComponent(url));
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Could not load that repository.");
       if (!data.prs.length) {
@@ -913,7 +915,7 @@
   });
 
   $("demo").addEventListener("click", async () => {
-    const list = await (await fetch("/api/samples")).json();
+    const list = await (await fetch(API + "/api/samples")).json();
     setItems(
             list.map((s) => ({
               id: "s" + s.id,
@@ -958,7 +960,7 @@
     renderQueue();
     try {
       const isUrl = it.kind === "url";
-      const res = await fetch(isUrl ? "/api/triage-url" : "/api/triage-text", {
+      const res = await fetch(API + (isUrl ? "/api/triage-url" : "/api/triage-text"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
@@ -1156,7 +1158,7 @@
   /* ---------- footer ---------- */
   (async () => {
     try {
-      const cfg = await (await fetch("/api/config")).json();
+      const cfg = await (await fetch(API + "/api/config")).json();
       $("model").textContent = cfg.model;
       $("lic").href = cfg.model_license_url;
       $("terms").href = cfg.gemini_api_terms_url;

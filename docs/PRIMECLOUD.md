@@ -28,3 +28,8 @@ public URL, not a dashboard screenshot.
 - Live URL: ______
 - Checked from a private/incognito window on: ______ (date/time)
 - Hello-world deployed first on: ______
+
+
+## Update: repo is split into backend/ and frontend/
+
+In PrimeCloud set **Root directory = `backend`**. The Dockerfile is `backend/Dockerfile`. The page is hosted on Vercel (Root Directory = `frontend`), see README.
